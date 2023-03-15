@@ -58,3 +58,11 @@ ImportSM2Prikey
 1.8.9.5
 增加了直接获取sij的功能。将导入秘钥和导出秘钥等操作包含在内。只用调用一次即可。
 
+
+verison: 1.8.9.6
+updated based  on verison 1.8.9.5  
+The original verison is 1.8.9.5. ccm.c ccm.h sm4.c sm4.h files were removed on this basis.
+and the gpio.c gpio.h was rewritten.The gpio control structure has beed redefiend. 
+Removed some test code.  unsigned long ISTECCSm4CcmTest(void)
+Removed the  include "ccm.h"  and  include "sm4.h"
+MIT's license description was added at the beginning of each file.
