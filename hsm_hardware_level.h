@@ -1,11 +1,18 @@
+/*
+ * 	Copyright (c) 2023 qinxd
+ *  qinxd
+ *  email:qinxd@istecc.com
+ *  Licensed under MIT License.
+ * 
+ */
 /**
   ******************************************************************************
   * File name: __HSM_HARDWARE_LEVEL__
   * Description: 
   * Auth : qin xiaodong 
   * Email: qinxd@istecc.com
-  * API VERSION: 0.2
-  * Time : 2022-6-15
+  * API VERSION: 0.3
+  * Time : 2023-3-15
   * note : HSM_ means high secure module.
   * This file provides hardware - specific initialization capabilities. SPI interface initialization, and reset, BUSY, SS three IO initialization.
   * The following functions are used by users:

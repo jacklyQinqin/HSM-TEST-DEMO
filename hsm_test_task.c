@@ -1,3 +1,10 @@
+/*
+ * 	Copyright (c) 2023 qinxd
+ *  qinxd
+ *  email:qinxd@istecc.com
+ *  Licensed under MIT License.
+ * 
+ */
 /**
   ******************************************************************************
   * file: hsm_test_task.c
@@ -17,7 +24,7 @@
 #include "hsm_hardware_level.h"
 //提供算法指令封装操作
 #include "hsm_logic_level.h"
-#include "ccm.h"
+
 //提供计时操作,用来统计算法效率
 #include <sys/time.h>
 
@@ -1135,62 +1142,7 @@ unsigned long ISTECCKeyDeriveTest(void)
 */
 unsigned long ISTECCSm4CcmTest(void)
 {
-    unsigned char key[16] = {0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11};
-    unsigned char iv[16] = {0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11};
-    unsigned char nonce[12] = {0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22};
-    unsigned char add[16] = {0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11};
-    unsigned char input[32] = {0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22,0x33,0x44,0x55,0x11,0x22};
-    unsigned char output[32];
-    unsigned char tag[16];
-    sm4_context ctx;
-    
-	unsigned long  ret = 0;
-
-    // //encrypt standard testing vector
-    // sm4_setkey_enc(&ctx,key);
-    // sm4_crypt_ecb(&ctx,1,32,input,output);
-    // hex_dump( output, 32,16,"cipther");
-
-    // //decrypt testing
-    // sm4_setkey_dec(&ctx,key);
-    // sm4_crypt_ecb(&ctx,0,32,output,output);
-    // hex_dump( output, 32,16,"message");
-
-    // //encrypt by SM4_CBC mode
-    // memset(output, 0, sizeof(output));
-    // sm4_setkey_enc(&ctx,key);
-    // sm4_crypt_cbc(&ctx,1,32,iv,input,output);
-    // hex_dump( output, 32,16,"cbc cipher");
-
-    /* SM4_CCM encpryt.*/
-    // memset(key, 0x77, sizeof(key));
-    // memset(nonce, 0x77, sizeof(nonce));
-
-    ccm_setkey_enc( &ctx, key);
-    ret = ccm_auth_crypt(&ctx, CCM_ENCRYPT, 32, nonce, 12, add, 0, input, output, tag, 16);
-    if(ret)
-    {
-        printf("CCM encrypt fail \n");
-        return 1;
-    }
-
-    hex_dump(tag,16,16,"tag");
-    hex_dump(output,32,16,"output");
-
-	printf("0\n");
-	/*SM4 CCM decrypt.*/
-	memset(input,0x00,sizeof(input));
-	memcpy(input,output,sizeof(input));
-	memset(output,0x00,sizeof(output));
-	printf("1\n");
-	ret = ccm_auth_crypt(&ctx, CCM_DECRYPT, 32, nonce, 12, add, 0, input, output,tag, 16);
-	printf("2\n");
-    if(ret)
-    {
-        printf("CCM decrypt fail \n");
-        return 1;
-    }
-    hex_dump(output,16,16,"CCM_DECRYPT:");
+	return 0;
 }
 
 

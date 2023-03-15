@@ -1,10 +1,9 @@
 /*
- * @Author: your name
- * @Date: 2021-04-19 15:08:39
- * @LastEditTime: 2022-11-02 14:12:52
- * @LastEditors: qinxd qinxd@istecc.com
- * @Description: 
- * @FilePath: \SKF-IMX8-IS32U512A\hsm_test_task.h
+ * 	Copyright (c) 2023 qinxd
+ *  qinxd
+ *  email:qinxd@istecc.com
+ *  Licensed under MIT License.
+ * 
  */
 #ifndef __HSM_TEST_TASK__
 #define __HSM_TEST_TASK__

@@ -1,11 +1,18 @@
+/*
+ * 	Copyright (c) 2023 qinxd
+ *  qinxd
+ *  email:qinxd@istecc.com
+ *  Licensed under MIT License.
+ * 
+ */
 /**
   ******************************************************************************
   * File name: hsm_hardware_level.c
   * Description: 
   * Auth : qin xiaodong 
   * Email: qinxd@istecc.com
-  * API VERSION: 0.2
-  * Time : 2022-6-15
+  * API VERSION: 0.3
+  * Time : 2023-3-15
   ******************************************************************************
   * NOTE:
   * The following test code for the hardware part, based on the author's NXP - IMX8MQ environment implementation. 
@@ -29,7 +36,7 @@
 #include <sys/ioctl.h>
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
-#include "gpio.h"
+#include "hsm_gpio.h"
 
 
 #define SPI_DEV_NAME  "/dev/spidev32766.0"
@@ -57,102 +64,22 @@ static int verbose;
 *IMX8MQ.RESET--->IS32U512A  
 */
 
-mesg busyPin = 
+GpioMessageTyepdef busyPin = 
 {
 	.pin = 98,
-	.flags = GPIO_IN,
+	.direction = GPIO_IN,
 };
 
 //mesg csPin = 
 //{
 //	.pin = 110,
-//	.flags = GPIO_OUT,
+//	.direction = GPIO_OUT,
 //};
-mesg resetPin = 
+GpioMessageTyepdef resetPin = 
 {
 	.pin = 96,
-	.flags = GPIO_OUT,
+	.direction = GPIO_OUT,
 };
-
-// /****************************************************************\
-// * Function:	    byteToWrod
-// *
-// * Description:  Convert a Byte stream to a Word stream. Perform 
-// *	alignment and size tail conversion.
-// *
-// * Calls:
-// *				None
-// *
-// * Called By:
-// *
-// * Input:       w		word pointer
-// *              c		char pointer
-// 			   len		the length of char
-			   
-// *				
-// * Output:	   None
-// *
-// *
-// * Return:
-// *			
-// *
-// * Others:
-// *			None
-// *
-// * Remark:	
-// \****************************************************************/
-// static void byteToWord(unsigned int * w,unsigned char *c, int len)
-// {
-	
-// 	int time  = (len+3) / 4;
-// 	int i = 0;
-// 	unsigned int temp = 0;
-// 	//t  = (unsigned int *)c;
-// 	for(i=0;i<time;i++)
-// 	{
-// 		temp =  c[i*4] << 24;
-// 		temp |= (c[i*4+1])<<16;
-// 		temp |= (c[i*4+2])<<8;
-// 		temp |= (c[i*4+3])<<0;
-// 		w[i] = temp;	
-// 	}
-// }
-// /*Word Convert to byte*/
-// static void wordToByte(unsigned char *c,unsigned int * w, int len)
-// {
-	
-// 	int time = len /4;
-// 	int rest = len %4;
-// 	int i = 0;
-// 	unsigned int temp = 0;
-	
-// 	for(i=0;i<time;i++)
-// 	{
-// 		c[i*4+0] = w[i]>>24 & 0xff;
-// 		c[i*4+1] = w[i]>>16 & 0xff;
-// 		c[i*4+2] = w[i]>>8 & 0xff;
-// 		c[i*4+3] = w[i]>>0 & 0xff;
-// 	}
-	
-// 	if(1 == rest)
-// 	{
-// 		c[i*4+0] = w[i]>>24 & 0xff;
-	
-// }
-// 	else if(2 == rest)
-// 	{
-// 		c[i*4+0] = w[i]>>24 & 0xff;
-// 		c[i*4+1] = w[i]>>16 & 0xff;
-// 	}
-// 	else if(3 == rest)
-// 	{
-// 		c[i*4+0] = w[i]>>24 & 0xff;
-// 		c[i*4+1] = w[i]>>16 & 0xff;
-// 		c[i*4+2] = w[i]>>8  & 0xff;
-// 	}
-		
-	
-// }
 
 
 /****************************************************************\

@@ -1,3 +1,10 @@
+/*
+ * 	Copyright (c) 2023 qinxd
+ *  qinxd
+ *  email:qinxd@istecc.com
+ *  Licensed under MIT License.
+ * 
+ */
 /**
  ******************************************************************************
  * File name: hsm_logic_level.c
@@ -33,8 +40,6 @@
 // self header file
 #include "hsm_logic_level.h"
 
-#include "sm4.h"
-#include "ccm.h"
 // sm3 algorithm
 //#include "sm3.h"
 

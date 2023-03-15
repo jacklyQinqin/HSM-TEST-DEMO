@@ -1,3 +1,10 @@
+/*
+ * 	Copyright (c) 2023 qinxd
+ *  qinxd
+ *  email:qinxd@istecc.com
+ *  Licensed under MIT License.
+ * 
+ */
 /**
  ******************************************************************************
  * File name: hsm_logic_level.c
