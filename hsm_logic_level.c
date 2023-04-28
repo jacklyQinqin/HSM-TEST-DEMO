@@ -1261,7 +1261,7 @@ unsigned long SM2Decrypt(unsigned long index, unsigned char *message, unsigned l
     {
         return fail;
     }
-
+    HSMMsDelay(1);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);

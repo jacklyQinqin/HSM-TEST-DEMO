@@ -29,7 +29,9 @@
 #define SM4_STRESS     			0X08
 #define SM2_VERIFY_ONE_CORE     0X09  /*original verify*/
 #define SM2_VERIFY_E_RS			0x0A  /*10 e value sign*/
-#define SM2_SIGN_E_VALUE		0x0B  /*11 E value sign*
+#define SM2_SIGN_E_VALUE		0x0B  /*11 E value sign*/
+#define SELF_TEST				0X0C  
+
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 static void pabort(const char *s)
 {
@@ -50,6 +52,7 @@ static void print_usage_English(void)
 	printf("  func 4: Pointer Descompress\n");
 	printf("  func 5: KEY_DERIVE\n");
 	printf("  func 10: E+RS verify mode\n");
+	printf("  func 12: HSM Self test\n");
 	printf("  input parameter with the test number\n");
 }
 
@@ -57,7 +60,8 @@ int main(int argc, char *argv[])
 {
 	int ret = 0;
 	int time = 0;
-	
+	int test_loop = 100;
+
 	int x = 100;
 	if (argc != 2)
 	{
@@ -110,6 +114,12 @@ int main(int argc, char *argv[])
 		IS32U512ASm2VerifyEvalueWithPubKeyIndex();
 	case SM2_SIGN_E_VALUE:
 		IS32U512ASm2SignEvalueAndVerifyEvalueWithPubKeyIndex();	
+	case SELF_TEST:
+		if(HSMSelfTest(test_loop))
+		{
+			printf("HSMSelfTest failed!\n");
+		}
+		break;
 	default:
 		printf("not support!\n");
 		break;

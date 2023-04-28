@@ -1481,9 +1481,6 @@ unsigned long  IS32U512ASm2SignEvalueAndVerifyEvalueWithPubKeyIndex(void)
 	/*Init the hardware . spi interface  and reset,busy io*/
 	HSMHardwareInit(SPI_SPEED_10M);
 	/*reset the 512A module*/
-	/*Init the hardware . spi interface  and reset,busy io*/
-	HSMHardwareInit(SPI_SPEED_10M);
-	/*reset the 512A module*/
 	HSMReset();
 
 	/*How to use sync ?if you has reset the module. you don't need sync. the default state of HSM module is receive instuction*/
