@@ -66,3 +66,15 @@ and the gpio.c gpio.h was rewritten.The gpio control structure has beed redefien
 Removed some test code.  unsigned long ISTECCSm4CcmTest(void)
 Removed the  include "ccm.h"  and  include "sm4.h"
 MIT's license description was added at the beginning of each file.
+
+
+verison: 1.8.9.6(01)
+add some debug message in gpio.c 
+the function SM2EValueVerify()  (in hsm_logic_level.c)
+add hsmdelay(10) below 
+    HSMMsDelay(1);
+    HSMMsDelay(10);
+    while (HSMGetBusystatus())
+
+
+

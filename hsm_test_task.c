@@ -354,6 +354,7 @@ unsigned long  IS32U512AReadVerisonTest(void)
 	ISTECCFunctionPointer_t ISTECC512AFunctionPointerStructure;
 	FunctionPointerInit(&ISTECC512AFunctionPointerStructure);
 
+	HSMHardwareDeinit();
 	/*Init the hardware . spi interface  and reset,busy io*/
 	HSMHardwareInit(SPI_SPEED_10M);
 	/*reset the 512A module*/

@@ -255,7 +255,7 @@ unsigned int  HSMHardwareInit(unsigned long in_speed)
 
     printf("spi mode: 0x%x\n", mode);
     printf("bits per word: %d\n", bits);
-
+	printf("spi fd is: %d\n", fd);
 	ExportGpioAndInit();
     return 0;
 }
@@ -263,7 +263,11 @@ unsigned int  HSMHardwareInit(unsigned long in_speed)
 /*close spi and release the io */
 unsigned int  HSMHardwareDeinit(void)
 {
-    close(fd);
+	if(fd > 0)
+	{
+		printf("close spi fd: %d\n",fd);
+		close(fd);
+	}
 	UnexportGpioAndInit();
     return 0;
 }

@@ -2374,6 +2374,7 @@ unsigned long SM2EValueVerify(unsigned long pubkey_index, unsigned char *e,unsig
         return fail;
     }
     HSMMsDelay(1);
+    HSMMsDelay(10);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
