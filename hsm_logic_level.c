@@ -48,13 +48,128 @@
 #include <string.h>
 
 #include "DownLoadFile.h"
+
+
+
+/*创建一个全局的锁*/
+#include <pthread.h>
+#include <semaphore.h>
+static pthread_mutex_t hsm_mutex_pthread;
+/*init pthread mutext*/
+int  HSMThreadMutexInit(void)
+{
+    int ret;
+    ret = pthread_mutex_init(&hsm_mutex_pthread,NULL);
+    return ret;
+}
+/**/
+void HSMThreadMutexDeinit(void)
+{
+    pthread_mutex_destroy(&hsm_mutex_pthread);
+}
+
+
+/*Creat a semphore.*/
+#include <sys/sem.h>
+//#include <semun.h>
+union semun
+{
+    int val;
+    struct semid_ds *buf;
+    unsigned short * array;
+    struct seminfo *__buf;
+    /* data */
+};
+
+
+static int hsm_semphore_id;
+int HSMSetSemphre(void);
+static void HSMDeleteSemphre(void);
+static int HSMPostSemphre(void);
+static int HSMVSemphre(void);
+
+int HSMSempohreInit(void);
+
+
+
+int HSMSetSemphre(void)
+{
+    union semun sem_union;
+    sem_union.val = 1;
+
+    if(semctl(hsm_semphore_id,0,SETVAL,sem_union) == -1)
+        return 0;
+    return 1;
+    
+}
+static void HSMDeleteSemphre(void)
+{
+    union semun sem_union;
+    sem_union.val = 1;
+
+    if(semctl(hsm_semphore_id,0,IPC_RMID,sem_union) == -1)
+       fprintf(stderr,"Failed to delete semphore.\n");
+}
+/*信号量-1操作*/
+static int HSMPSemphre(void)
+{
+    struct sembuf sem_b;
+    sem_b.sem_num = 0;
+    sem_b.sem_op = -1;
+    sem_b.sem_flg = SEM_UNDO;
+    if(semop(hsm_semphore_id,&sem_b,1)  == -1)
+    {
+        fprintf(stderr,"Failed to HSMPSemphre.\n");
+        return 0;
+    }
+    printf(
+        "P"
+    );
+    return 1;
+}
+/*信号量+1操作*/
+static int HSMVSemphre(void)
+{
+    
+    struct sembuf sem_b;
+    sem_b.sem_num = 0;
+    sem_b.sem_op = 1;
+    sem_b.sem_flg = SEM_UNDO;
+    if(semop(hsm_semphore_id,&sem_b,1)  == -1)
+    {
+        fprintf(stderr,"Failed to HSMVSemphre.\n");
+        return 0;
+    }
+    printf(
+        "V"
+    );
+    return 1;
+}
+
+/*creat semphore or get key*/
+int HSMSempohreInit(void)
+{
+    hsm_semphore_id = semget((key_t)1234,1,0666|IPC_CREAT);
+    
+    printf("get sem id %4d\n",hsm_semphore_id);
+    return hsm_semphore_id;
+}
+
+int HSMSempohreDeInit(void)
+{
+    HSMDeleteSemphre();
+    return 0;
+}
+
+
+
+
+
 /*print log yes or no*/
 #define HSM_LOGIC_LINIX_DEBUG_ON 0
 /*send and receive buff*/
 static unsigned char tx_buff[2064] = {0};
 static unsigned char rx_buff[2064] = {0};
-
-
 
 unsigned long  V2XDeviceGetRandom(unsigned char * buff, unsigned long len);
 unsigned long  V2XDeviceGetSM4Key(unsigned char * buff);
@@ -85,11 +200,16 @@ unsigned long  V2XDeviceGetSM4Key(unsigned char * buff);
 \****************************************************************/
 unsigned long CosReadVersion(unsigned char *version)
 {
+    unsigned char tx_buff[2064] = {0};
+    unsigned char rx_buff[2064] = {0};
     unsigned long ret = 0;
     unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN;
     unsigned long rx_buff_len = 6;
     /*copy the command to send buff*/
     const uint8_t read_version[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x10, 0x06, 0x00, 0x0, 0x0};
+    
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     memcpy(tx_buff, read_version, IS32U512A_SM2_MODULE_CMD_LEN);
     /*cal the total length*/
     tx_buff[IS32U512A_SM2_DATA_LEN_H_OFFSET] = tx_buff_len / 256;
@@ -102,19 +222,27 @@ unsigned long CosReadVersion(unsigned char *version)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(2);
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(version, rx_buff + 2, rx_buff_len-2);
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+    pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -151,6 +279,8 @@ unsigned long GenKeyPair(unsigned long index)
     unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN;
     unsigned long rx_buff_len = 4;
     const unsigned char gen_key_pair[IS32U512A_SM2_MODULE_CMD_LEN] = {0XBF, 0X05, 0X06, 0X00, 0X00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     memcpy(tx_buff, gen_key_pair, IS32U512A_SM2_MODULE_CMD_LEN);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = index;
     tx_buff[IS32U512A_SM2_DATA_LEN_H_OFFSET] = tx_buff_len / 256;
@@ -164,9 +294,11 @@ unsigned long GenKeyPair(unsigned long index)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(20);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
@@ -175,12 +307,18 @@ unsigned long GenKeyPair(unsigned long index)
     #endif
     if (ret != 0)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+     HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -218,7 +356,8 @@ unsigned long SM2SetID(unsigned long index, unsigned char *sm2_id, unsigned char
     unsigned long  tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN + length + 1;
     unsigned long rx_buff_len = 4;
     const uint8_t is32u512a_set_id[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x14, 0x00, 0x00, 0x00, 0x00};
-
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     memcpy(tx_buff, is32u512a_set_id, IS32U512A_SM2_MODULE_CMD_LEN);
     tx_buff[IS32U512A_SM2_MODULE_CMD_LEN] = length;
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN + 1], sm2_id, length);
@@ -232,21 +371,29 @@ unsigned long SM2SetID(unsigned long index, unsigned char *sm2_id, unsigned char
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 
-    HSMUsDelay(1);
+    HSMMsDelay(2);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+          HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+     HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 /****************************************************************\
@@ -282,7 +429,8 @@ unsigned long ImportSM2Pubkey(unsigned long index, unsigned char *pubkey_x, unsi
     unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN + IS32U512A_SM2_PUBKEY_LEN;
     unsigned long rx_buff_len = 4;
     const uint8_t import_sm2pubkey_cmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x01, 0x46, 0x00, 0x00, 0x00};
-
+     pthread_mutex_lock(&hsm_mutex_pthread);
+     HSMPSemphre();
     memcpy(tx_buff, import_sm2pubkey_cmd, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], pubkey_x, 32);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN + 32], pubkey_y, 32);
@@ -298,6 +446,8 @@ unsigned long ImportSM2Pubkey(unsigned long index, unsigned char *pubkey_x, unsi
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -306,6 +456,8 @@ unsigned long ImportSM2Pubkey(unsigned long index, unsigned char *pubkey_x, unsi
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -313,8 +465,12 @@ unsigned long ImportSM2Pubkey(unsigned long index, unsigned char *pubkey_x, unsi
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+     HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 /****************************************************************\
@@ -350,6 +506,8 @@ unsigned long ImportSM2Prikey(unsigned long index, unsigned char *prikey_d)
     unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN + IS32U512A_SM2_PRIKEY_LEN;
     unsigned long rx_buff_len = 4;
     uint8_t import_sm2prikey_cmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x02, 0x00, 0x00, 0x00, 0x00};
+     pthread_mutex_lock(&hsm_mutex_pthread);
+     HSMPSemphre();
     memcpy(tx_buff, import_sm2prikey_cmd, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], prikey_d, 32);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = index;
@@ -364,9 +522,12 @@ unsigned long ImportSM2Prikey(unsigned long index, unsigned char *prikey_d)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(2);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
@@ -375,10 +536,14 @@ unsigned long ImportSM2Prikey(unsigned long index, unsigned char *prikey_d)
 #endif
     if (ret != 0)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
     return fail;
@@ -417,7 +582,8 @@ unsigned long ExportSM2Pubkey(unsigned long index, unsigned char *pubkey_x, unsi
     unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN;
     unsigned long rx_buff_len = 2 + IS32U512A_SM2_PUBKEY_LEN;
     const uint8_t export_sm2pubkey_cmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x06, 0x06, 0x00, 0x00, 0x00};
-
+ pthread_mutex_lock(&hsm_mutex_pthread);
+ HSMPSemphre();
     memcpy(tx_buff, export_sm2pubkey_cmd, IS32U512A_SM2_MODULE_CMD_LEN);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = index;
     tx_buff[IS32U512A_SM2_DATA_LEN_H_OFFSET] = tx_buff_len / 256;
@@ -431,6 +597,8 @@ unsigned long ExportSM2Pubkey(unsigned long index, unsigned char *pubkey_x, unsi
 #endif
     if (0 != ret)
     {
+         HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -442,14 +610,21 @@ unsigned long ExportSM2Pubkey(unsigned long index, unsigned char *pubkey_x, unsi
 #endif
     if (ret != 0)
     {
+         HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        
         memcpy(pubkey_x, &rx_buff[2], 32);
         memcpy(pubkey_y, &rx_buff[34], 32);
+         HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+     HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 /****************************************************************\
@@ -486,6 +661,8 @@ unsigned long ExportSM2Prikey(unsigned long index, unsigned char *prikey_d)
     unsigned long rx_buff_len = 2 + IS32U512A_SM2_PRIKEY_LEN;
 
     const uint8_t export_sm2prikey_cmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x07, 0x00, 0x00, 0x00, 0x00};
+     pthread_mutex_lock(&hsm_mutex_pthread);
+     HSMPSemphre();
     memcpy(tx_buff, export_sm2prikey_cmd, IS32U512A_SM2_MODULE_CMD_LEN);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = index;
     tx_buff[IS32U512A_SM2_DATA_LEN_H_OFFSET] = tx_buff_len / 256;
@@ -499,9 +676,11 @@ unsigned long ExportSM2Prikey(unsigned long index, unsigned char *prikey_d)
     #endif
     if (0 != ret)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(2);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
@@ -510,13 +689,20 @@ unsigned long ExportSM2Prikey(unsigned long index, unsigned char *prikey_d)
 #endif
     if (ret != 0)
     {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+       
         memcpy(prikey_d, &rx_buff[2], 32);
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -554,6 +740,8 @@ unsigned long SM2SingleVerify(unsigned long pubkey_index, unsigned char *p_org_d
     unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN + org_len + SM2_R_LEN + SM2_S_LEN;
     unsigned long rx_buff_len = 4;
     unsigned char SM2VerifyCmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x04, 0x00, 0x00, 0x00, 0x00};
+     pthread_mutex_lock(&hsm_mutex_pthread);
+     HSMPSemphre();
     memcpy(tx_buff, SM2VerifyCmd, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], p_org_data, org_len);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN + org_len], p_sign_result, SM2_R_LEN + SM2_S_LEN);
@@ -570,9 +758,11 @@ unsigned long SM2SingleVerify(unsigned long pubkey_index, unsigned char *p_org_d
 #endif
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+     HSMMsDelay(10);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
@@ -581,12 +771,18 @@ unsigned long SM2SingleVerify(unsigned long pubkey_index, unsigned char *p_org_d
 #endif
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+      pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -625,6 +821,8 @@ unsigned long SM2Sign(unsigned long prikey_index, unsigned char *p_org_data, uns
     unsigned long rx_buff_len = 2 + SM2_R_LEN + SM2_S_LEN;
 
     unsigned char sm2_sign_cmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x03, 0x00, 0x00, 0x00, 0x00};
+     pthread_mutex_lock(&hsm_mutex_pthread);
+     HSMPSemphre();
     memcpy(tx_buff, sm2_sign_cmd, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], p_org_data, org_len);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = prikey_index;
@@ -639,9 +837,11 @@ unsigned long SM2Sign(unsigned long prikey_index, unsigned char *p_org_data, uns
 #endif
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMUsDelay(VERIFY_DELAY);
+    HSMMsDelay(5);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
@@ -650,13 +850,19 @@ unsigned long SM2Sign(unsigned long prikey_index, unsigned char *p_org_data, uns
 #endif
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(p_sign_data, &rx_buff[2], 64);
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -694,6 +900,8 @@ unsigned long SM2SignEValue(unsigned long prikey_index, unsigned char *e,unsigne
     unsigned long rx_buff_len = 2 + SM2_R_LEN + SM2_S_LEN;
 
     unsigned char sm2_sign_cmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x23, 0x00, 0x00, 0x00, 0x00};
+     pthread_mutex_lock(&hsm_mutex_pthread);
+     HSMPSemphre();
     memcpy(tx_buff, sm2_sign_cmd, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], e, 32);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = prikey_index;
@@ -708,9 +916,12 @@ unsigned long SM2SignEValue(unsigned long prikey_index, unsigned char *e,unsigne
 #endif
     if (0 != ret)
     {
+
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMUsDelay(VERIFY_DELAY);
+    HSMMsDelay(5);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
@@ -719,13 +930,21 @@ unsigned long SM2SignEValue(unsigned long prikey_index, unsigned char *e,unsigne
 #endif
     if (ret != 0)
     {
+
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        
         memcpy(p_sign_data, &rx_buff[2], SM2_R_LEN + SM2_S_LEN);
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -762,6 +981,8 @@ unsigned long PinConfirm(unsigned char *pin_value, unsigned long len_of_pin)
 
     unsigned char pin_verify[IS32U512A_SM2_MODULE_CMD_LEN] = {0XBF, 0X0C, 0X0E, 0X00, 0x00, 0X00};
     unsigned char pin_cancel_verify[IS32U512A_SM2_MODULE_CMD_LEN] = {0XBF, 0X0D, 0X0E, 0X00, 0X00, 0x00};
+     pthread_mutex_lock(&hsm_mutex_pthread);
+     HSMPSemphre();
     memcpy(tx_buff, pin_verify, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], pin_value, len_of_pin);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = 0;
@@ -776,6 +997,8 @@ unsigned long PinConfirm(unsigned char *pin_value, unsigned long len_of_pin)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -784,6 +1007,8 @@ unsigned long PinConfirm(unsigned char *pin_value, unsigned long len_of_pin)
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -791,8 +1016,12 @@ unsigned long PinConfirm(unsigned char *pin_value, unsigned long len_of_pin)
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -828,6 +1057,8 @@ unsigned long PinConfirmCancel(unsigned char *pin_value, unsigned long len_of_pi
     unsigned long rx_buff_len = 4;
 
     unsigned char pin_cancel_verify[IS32U512A_SM2_MODULE_CMD_LEN] = {0XBF, 0X0D, 0X0E, 0X00, 0X00, 0x00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     memcpy(tx_buff, pin_cancel_verify, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], pin_value, len_of_pin);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = 0;
@@ -842,14 +1073,18 @@ unsigned long PinConfirmCancel(unsigned char *pin_value, unsigned long len_of_pi
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(2);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -857,8 +1092,12 @@ unsigned long PinConfirmCancel(unsigned char *pin_value, unsigned long len_of_pi
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 /****************************************************************\
@@ -894,6 +1133,8 @@ unsigned long PinChange(unsigned char *old_pin_value, unsigned char *new_pin_val
     unsigned long rx_buff_len = 4;
 
     unsigned char pin_change[IS32U512A_SM2_MODULE_CMD_LEN] = {0XBF, 0X0E, 0X0E, 0X00, 0X00, 0x00};
+     pthread_mutex_lock(&hsm_mutex_pthread);
+     HSMPSemphre();
     memcpy(tx_buff, pin_change, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], old_pin_value, len_of_pin);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN + len_of_pin], new_pin_value, len_of_pin);
@@ -909,14 +1150,18 @@ unsigned long PinChange(unsigned char *old_pin_value, unsigned char *new_pin_val
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(5);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -924,8 +1169,12 @@ unsigned long PinChange(unsigned char *old_pin_value, unsigned char *new_pin_val
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -958,12 +1207,16 @@ unsigned long SyncStatus(void)
     unsigned long ret = 0;
     unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN;
     unsigned long rx_buff_len = 4;
-
+    unsigned char tx_buff[2064] = {0};
+    unsigned char rx_buff[2064] = {0};
     const uint8_t is32u512a_module_sync[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0xFA, 0x06, 0x00, 0x00, 0x00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
+
     memcpy(tx_buff, is32u512a_module_sync, IS32U512A_SM2_MODULE_CMD_LEN);
     tx_buff[IS32U512A_SM2_DATA_LEN_H_OFFSET] = tx_buff_len / 256;
     tx_buff[IS32U512A_SM2_DATA_LEN_L_OFFSET] = tx_buff_len % 256;
-
+    
     /*try to switch the state of the module to receiving state once */
     while (HSMGetBusystatus())
         ;
@@ -973,6 +1226,8 @@ unsigned long SyncStatus(void)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -985,6 +1240,8 @@ unsigned long SyncStatus(void)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 
@@ -994,6 +1251,8 @@ unsigned long SyncStatus(void)
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1001,6 +1260,8 @@ unsigned long SyncStatus(void)
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
 
@@ -1013,6 +1274,8 @@ unsigned long SyncStatus(void)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -1025,6 +1288,8 @@ unsigned long SyncStatus(void)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 
@@ -1034,6 +1299,8 @@ unsigned long SyncStatus(void)
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1041,8 +1308,12 @@ unsigned long SyncStatus(void)
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+    pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -1083,6 +1354,8 @@ unsigned long SM2Encrypt(unsigned long index, unsigned char *message, unsigned l
     unsigned long rx_buff_len = 4;
     const unsigned char is32u512a_sm2_encrypt[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x08, 0x00, 0x00, 0x00, 0x00};
     const unsigned char is32u512a_sm2_read_encrypt_result[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x09, 0x06, 0x00, 0x00, 0x00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     memcpy(tx_buff, is32u512a_sm2_encrypt, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], message, len);
     tx_buff[IS32U512A_SM2_MODULE_CMD_INDEX_OFFSET] = index;
@@ -1097,14 +1370,18 @@ unsigned long SM2Encrypt(unsigned long index, unsigned char *message, unsigned l
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(10);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1112,10 +1389,13 @@ unsigned long SM2Encrypt(unsigned long index, unsigned char *message, unsigned l
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        
         ;
     }
     else
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 
@@ -1135,6 +1415,8 @@ unsigned long SM2Encrypt(unsigned long index, unsigned char *message, unsigned l
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -1143,6 +1425,8 @@ unsigned long SM2Encrypt(unsigned long index, unsigned char *message, unsigned l
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1151,10 +1435,14 @@ unsigned long SM2Encrypt(unsigned long index, unsigned char *message, unsigned l
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(out, &rx_buff[2], rx_buff_len - 2);
+        HSMVSemphre();
+      pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
     else
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 }
@@ -1199,7 +1487,8 @@ unsigned long SM2Decrypt(unsigned long index, unsigned char *message, unsigned l
     const uint8_t is32u512a_sm2_decrypt[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x0a, 0x00, 0x00, 0x00, 0x00};
     /*sm2 read decrypt result*/
     const uint8_t is32u512a_sm2_read_decrypt_result[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x0b, 0x06, 0x00, 0x00, 0x00};
-
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     /*Packaging */
     memcpy(tx_buff, is32u512a_sm2_decrypt, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], message, len);
@@ -1218,9 +1507,11 @@ unsigned long SM2Decrypt(unsigned long index, unsigned char *message, unsigned l
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(10);
     /*Watting for HSM free.*/
     while (HSMGetBusystatus())
         ;
@@ -1228,6 +1519,8 @@ unsigned long SM2Decrypt(unsigned long index, unsigned char *message, unsigned l
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1239,6 +1532,8 @@ unsigned long SM2Decrypt(unsigned long index, unsigned char *message, unsigned l
     }
     else
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 
@@ -1259,6 +1554,8 @@ unsigned long SM2Decrypt(unsigned long index, unsigned char *message, unsigned l
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -1267,6 +1564,8 @@ unsigned long SM2Decrypt(unsigned long index, unsigned char *message, unsigned l
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1276,10 +1575,14 @@ unsigned long SM2Decrypt(unsigned long index, unsigned char *message, unsigned l
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(out, &rx_buff[2], rx_buff_len - 2);
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return 0;
     }
     else
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 }
@@ -1317,6 +1620,8 @@ unsigned long ReadFactoryNumber(unsigned char *fac_num)
     unsigned long rx_buff_len = 15;
     /*定义基本指令部分*/
     const uint8_t read_fac_num[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x0f, 0x06, 0x00, 0x00, 0x00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     /*将需要发送的数据进行组包*/
     memcpy(tx_buff, read_fac_num, IS32U512A_SM2_MODULE_CMD_LEN);
     /*计算INDEX和数据总长度*/
@@ -1326,20 +1631,28 @@ unsigned long ReadFactoryNumber(unsigned char *fac_num)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(fac_num, rx_buff + 2, rx_buff_len - 2);
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -1376,6 +1689,8 @@ unsigned long SM4ImportKey(unsigned long index, unsigned char *key)
     unsigned long rx_buff_len = 4;
     /*定义基本指令部分*/
     const uint8_t sm4_import_key[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x11, 0x16, 0x00, 0x00, 0x00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     /*将需要发送的数据进行组包*/
     memcpy(tx_buff, sm4_import_key, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], key, IS32U512A_SM4_KEY_LEN);
@@ -1392,6 +1707,8 @@ unsigned long SM4ImportKey(unsigned long index, unsigned char *key)
 #endif
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -1403,13 +1720,19 @@ unsigned long SM4ImportKey(unsigned long index, unsigned char *key)
 #endif
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -1448,6 +1771,8 @@ unsigned long SM4Encrpyt(unsigned long index, unsigned char *in, unsigned long l
     unsigned long rx_buff_len = 2 + len;
     /*定义基本指令部分*/
     const uint8_t sm4_encrypt[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x12, 0x16, 0x00, 0x00, 0x00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     /*将需要发送的数据进行组包*/
     memcpy(tx_buff, sm4_encrypt, IS32U512A_SM2_MODULE_CMD_LEN);
     /*计算INDEX和数据总长度*/
@@ -1463,14 +1788,18 @@ unsigned long SM4Encrpyt(unsigned long index, unsigned char *in, unsigned long l
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(10);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1479,8 +1808,12 @@ unsigned long SM4Encrpyt(unsigned long index, unsigned char *in, unsigned long l
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(out, rx_buff + 2, rx_buff_len - 2);
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -1519,6 +1852,8 @@ unsigned long SM4Decrpyt(unsigned long index, unsigned char *in, unsigned long l
     unsigned long rx_buff_len = 2 + len;
     /*定义基本指令部分*/
     const uint8_t sm4_decrypt[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x13, 0x16, 0x00, 0x00, 0x00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     /*将需要发送的数据进行组包*/
     memcpy(tx_buff, sm4_decrypt, IS32U512A_SM2_MODULE_CMD_LEN);
     /*计算INDEX和数据总长度*/
@@ -1534,9 +1869,11 @@ unsigned long SM4Decrpyt(unsigned long index, unsigned char *in, unsigned long l
 #endif
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(1);
+    HSMMsDelay(10);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
@@ -1547,13 +1884,19 @@ unsigned long SM4Decrpyt(unsigned long index, unsigned char *in, unsigned long l
 
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(out, rx_buff + 2, rx_buff_len - 2);
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -1590,7 +1933,8 @@ unsigned long SM2PointerDecompress(unsigned char * gx, ISTECCPointDecompressMode
     //点解压命令 CMD(5) +MODE(1)+GX(32)共38字节，返回值为9000 + PUBKEY 66字节
     const unsigned char pointDecompressCmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0XBF,0X25,0X00,0X00,0X21,0X00};
 
-    
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     memset(tx_buff,0x00,100);
     memcpy(tx_buff, pointDecompressCmd, sizeof(pointDecompressCmd));
     tx_buff[IS32U512A_SM2_MODULE_CMD_LEN-1] = mode;
@@ -1598,6 +1942,8 @@ unsigned long SM2PointerDecompress(unsigned char * gx, ISTECCPointDecompressMode
 	memcpy(tx_buff+IS32U512A_SM2_MODULE_CMD_LEN,gx,IS32U512A_SM2_GX_LEN);
     if((mode != ISTECC_POINT_DECOMPRESS_2) &&( mode != ISTECC_POINT_DECOMPRESS_3))
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return ERROR_DECOMPRESS_MODE_NO_SUPPORT;
     }
     HSMMsDelay(1);
@@ -1609,15 +1955,19 @@ unsigned long SM2PointerDecompress(unsigned char * gx, ISTECCPointDecompressMode
     #endif
         if (0 != ret)
         {
+            HSMVSemphre();
+             pthread_mutex_unlock(&hsm_mutex_pthread);
             return fail;
         }
-        HSMMsDelay(1);
+        HSMMsDelay(2);
         while (HSMGetBusystatus())
             ;
 
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1626,8 +1976,12 @@ unsigned long SM2PointerDecompress(unsigned char * gx, ISTECCPointDecompressMode
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(pubkey, rx_buff + 2, rx_buff_len - 2);
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 
 }
@@ -1777,7 +2131,8 @@ unsigned long SM2Getbij(unsigned char *kS,unsigned long i , unsigned long j)
     unsigned long rx_buff_len = 2 + 4;
 
     const unsigned char sign_key_kdf[IS32U512A_SM2_MODULE_CMD_LEN+2] = {0XBF,0X3C,0X00,0X00,0X00,0X00};
-		
+	pthread_mutex_lock(&hsm_mutex_pthread);	
+    HSMPSemphre();
     memset(tx_buff,0x00,100);
     memcpy(tx_buff, sign_key_kdf, sizeof(sign_key_kdf));
 
@@ -1814,15 +2169,19 @@ unsigned long SM2Getbij(unsigned char *kS,unsigned long i , unsigned long j)
     #endif
         if (0 != ret)
         {
+            HSMVSemphre();
+             pthread_mutex_unlock(&hsm_mutex_pthread);
             return fail;
         }
-        HSMMsDelay(1);
+        HSMMsDelay(5);
         while (HSMGetBusystatus())
             ;
 
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1830,11 +2189,15 @@ unsigned long SM2Getbij(unsigned char *kS,unsigned long i , unsigned long j)
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
     printf("SM2Getbij fail!\n");
 #endif
+HSMVSemphre();
+ pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 
 }
@@ -1875,7 +2238,8 @@ unsigned long SM2Getqij(unsigned char *kE,unsigned long i , unsigned long j)
     unsigned long rx_buff_len = 2 + 4;
     //get qij
     const unsigned char encrypt_key_kdf[IS32U512A_SM2_MODULE_CMD_LEN+2] = {0XBF,0X3D,0X00,0X00,0X00,0X00};
-		
+	pthread_mutex_lock(&hsm_mutex_pthread);	
+    HSMPSemphre();
     memset(tx_buff,0x00,100);
     memcpy(tx_buff, encrypt_key_kdf, sizeof(encrypt_key_kdf));
 
@@ -1912,15 +2276,19 @@ unsigned long SM2Getqij(unsigned char *kE,unsigned long i , unsigned long j)
     #endif
         if (0 != ret)
         {
+            HSMVSemphre();
+             pthread_mutex_unlock(&hsm_mutex_pthread);
             return fail;
         }
-        HSMMsDelay(1);
+        HSMMsDelay(5);
         while (HSMGetBusystatus())
             ;
 
     ret = HSMRead(rx_buff, rx_buff_len);
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
@@ -1928,11 +2296,15 @@ unsigned long SM2Getqij(unsigned char *kE,unsigned long i , unsigned long j)
 #endif
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
 #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
     printf("SM2Getqij fail!\n");
 #endif
+HSMVSemphre();
+ pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 
 }
@@ -1950,6 +2322,8 @@ unsigned long ModAdd(unsigned char *bij,unsigned char *c,unsigned char *out_sij)
 		unsigned long tx_buff_len = 0x4c; /*CMD*/
 		unsigned long rx_buff_len =34;
 		const unsigned char kdf_mod_add[12] = {0XBF,0X3B,0X00,0X00,0X00,0X00,0X00,0X00,0X00,0X00,0X00,0X00};
+        pthread_mutex_lock(&hsm_mutex_pthread);
+        HSMPSemphre();
 		memcpy(tx_buff,kdf_mod_add,12);
 		tx_buff[6] = (tx_buff_len)/256;
 		tx_buff[7] = (tx_buff_len)%256;
@@ -1961,25 +2335,34 @@ unsigned long ModAdd(unsigned char *bij,unsigned char *c,unsigned char *out_sij)
 		ret =  HSMWrite(tx_buff,tx_buff_len);
 		if(0!=ret)
 		{
+            HSMVSemphre();
+             pthread_mutex_unlock(&hsm_mutex_pthread);
 			return fail;
 		}
-#if HAM_LOGIC_LEVEL_DEBUG_ON == DEBUG_OPEN
+    #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)
 		hex_dump(tx_buff,tx_buff_len, 16,"KDF_ModAdd tx:");
-#endif	
+    #endif	
 		HSMMsDelay(20);
 		while(HSMGetBusystatus());
 		ret = HSMRead(rx_buff,rx_buff_len);
-		
+    #if (HSM_LOGIC_LINIX_DEBUG_ON == 1)	
 		hex_dump(rx_buff,rx_buff_len, 16,"KDF_ModAdd rx:");
+    #endif
 		if(ret !=0)
 		{
+            HSMVSemphre();
+             pthread_mutex_unlock(&hsm_mutex_pthread);
 			return fail;
 		}
 		if(rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
 		{
 			memcpy(out_sij,rx_buff+2,32);
+            HSMVSemphre();
+            pthread_mutex_unlock(&hsm_mutex_pthread);
 			return sucess;
 		}
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
 		return fail;
 }
 
@@ -2061,6 +2444,8 @@ unsigned long APPErase(void)
     unsigned long rx_buff_len = 4;
 
     const uint8_t read_version[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0xfb, 0x06, 0x00, 0x0, 0x0};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     memcpy(tx_buff, read_version, IS32U512A_SM2_MODULE_CMD_LEN);
 
     tx_buff[IS32U512A_SM2_DATA_LEN_H_OFFSET] = tx_buff_len / 256;
@@ -2071,9 +2456,13 @@ unsigned long APPErase(void)
     ret = HSMWrite(tx_buff, tx_buff_len);
     if (0 != ret)
     {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(20);
+    HSMVSemphre();
+    pthread_mutex_unlock(&hsm_mutex_pthread);
     return 0;
 }
 
@@ -2131,7 +2520,9 @@ static unsigned long IS32U512AReceiveOneMessage(unsigned char *rec, unsigned lon
         }
         HSMMsDelay(1);
     }
+    #if(HSM_LOGIC_DEBUG==1)
     hex_dump(rec,16,16,"IS32U512AReceiveOneMessage:");
+    #endif
     return sucess;
 }
 
@@ -2146,13 +2537,15 @@ unsigned long APPUpdate(void)
     unsigned char xor = 0;
     unsigned long ret =  0;
     unsigned long i = 0;
-
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     const char cod_guide[]={0x40,0x42,0x53,0x55,0x0e,0x00,0x00,0x00,0xbf,0x49,0x00,0x00,0x00,0xfc};
     // ret  = BootloaderSync();
     // if(ret)
     // {
     //     return fail;
     // }
+    
     for(time=0;time<MAX_LINE;time++)
     {
         printf("the line is %d\n",time);
@@ -2203,14 +2596,18 @@ unsigned long APPUpdate(void)
         {
             ;
         } else{
-            
+            HSMVSemphre();
+             pthread_mutex_unlock(&hsm_mutex_pthread);
             printf("APPUpdate result error!\n");
             return  fail;
         }
     }
 
     IS32U512ASendOneMessage(cod_guide,sizeof(cod_guide));
+    
     HSMMsDelay(30);
+    HSMVSemphre();
+    pthread_mutex_unlock(&hsm_mutex_pthread);
     return sucess;
 }
 
@@ -2223,6 +2620,8 @@ unsigned long  V2XDeviceGetRandom(unsigned char * buff,unsigned long len)
     unsigned long rx_buff_len = 2 + len;
     /*定义基本指令部分*/
     const unsigned char get_random[IS32U512A_SM2_MODULE_CMD_LEN] = {0XBF,0X40,0X00,0X00,0X00,0X00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     /*计算INDEX和数据总长度*/
     tx_buff[IS32U512A_SM2_DATA_LEN_H_OFFSET] = tx_buff_len / 256;
     tx_buff[IS32U512A_SM2_DATA_LEN_L_OFFSET] = tx_buff_len % 256;
@@ -2238,6 +2637,8 @@ unsigned long  V2XDeviceGetRandom(unsigned char * buff,unsigned long len)
 #endif
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -2249,13 +2650,19 @@ unsigned long  V2XDeviceGetRandom(unsigned char * buff,unsigned long len)
 #endif
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
         memcpy(buff, &rx_buff[2], len);
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 
@@ -2355,6 +2762,8 @@ unsigned long SM2EValueVerify(unsigned long pubkey_index, unsigned char *e,unsig
     unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN + 32 + SM2_R_LEN + SM2_S_LEN;
     unsigned long rx_buff_len = 4;
     unsigned char SM2EvalueVerifyCmd[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0x28, 0x00, 0x00, 0x00, 0x00};
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
     memcpy(tx_buff, SM2EvalueVerifyCmd, IS32U512A_SM2_MODULE_CMD_LEN);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN], e, 32);
     memcpy(&tx_buff[IS32U512A_SM2_MODULE_CMD_LEN + 32], rs, SM2_R_LEN + SM2_S_LEN);
@@ -2371,6 +2780,8 @@ unsigned long SM2EValueVerify(unsigned long pubkey_index, unsigned char *e,unsig
 #endif
     if (0 != ret)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     HSMMsDelay(1);
@@ -2383,12 +2794,18 @@ unsigned long SM2EValueVerify(unsigned long pubkey_index, unsigned char *e,unsig
 #endif
     if (ret != 0)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
     if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
     {
+        HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
         return sucess;
     }
+    HSMVSemphre();
+     pthread_mutex_unlock(&hsm_mutex_pthread);
     return fail;
 }
 

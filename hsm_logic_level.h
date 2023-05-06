@@ -203,4 +203,10 @@ typedef struct
 
 /*Don't care about it. The funciton has init the pointer .*/
 unsigned long FunctionPointerInit(ISTECCFunctionPointer_t *p);
+
+
+
+int HSMSempohreInit(void);
+int  HSMThreadMutexInit(void);
+int HSMSempohreDeInit(void);
 #endif

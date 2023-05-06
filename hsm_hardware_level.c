@@ -41,6 +41,9 @@
 
 #define SPI_DEV_NAME  "/dev/spidev32766.0"
 
+#define HSM_HARDWARE_DEBUG 0
+
+
 //hardware init.
 //spi init
 //and handshake init.
@@ -256,18 +259,18 @@ unsigned int  HSMHardwareInit(unsigned long in_speed)
     printf("spi mode: 0x%x\n", mode);
     printf("bits per word: %d\n", bits);
 	printf("spi fd is: %d\n", fd);
-	ExportGpioAndInit();
+	//ExportGpioAndInit();
     return 0;
 }
 
 /*close spi and release the io */
 unsigned int  HSMHardwareDeinit(void)
 {
-	if(fd > 0)
-	{
-		printf("close spi fd: %d\n",fd);
-		close(fd);
-	}
+	// if(fd > 0)
+	// {
+	// 	printf("close spi fd: %d\n",fd);
+	// 	close(fd);
+	// }
 	UnexportGpioAndInit();
     return 0;
 }
@@ -335,8 +338,10 @@ unsigned int HSMWrite(unsigned char * tx,unsigned int tx_len)
 	        printf("can't send spi message");
 	        return ret;
 	    }
-
+		#if(HSM_HARDWARE_DEBUG==1)
 		hex_dump(tx, tx_len, 32, "the send message is:");
+		#endif
+
 	    return 0;
 	}
 	// else if (WORD_TR_MODE==bits)
@@ -462,8 +467,10 @@ unsigned int HSMRead(unsigned char * rx,unsigned int rx_len)
 			printf("can't rec spi message");
 			return ret;
 		}
-		
+		#if(HSM_HARDWARE_DEBUG==1)
 		hex_dump(rx, rx_len, 16, "the rec message is:");
+		#endif
+
 		return 0;
 	
 	}
@@ -549,7 +556,10 @@ unsigned int HSMRead(unsigned char * rx,unsigned int rx_len)
 \****************************************************************/
 unsigned int HSMGetBusystatus(void)
 {
-	return  gpio_read(&busyPin);
+
+	usleep(100);
+	//return  gpio_read(&busyPin);
+	return 0;
 }
 
 

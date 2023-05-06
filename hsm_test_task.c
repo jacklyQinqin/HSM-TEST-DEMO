@@ -354,8 +354,8 @@ unsigned long  IS32U512AReadVerisonTest(void)
 	ISTECCFunctionPointer_t ISTECC512AFunctionPointerStructure;
 	FunctionPointerInit(&ISTECC512AFunctionPointerStructure);
 
-	HSMHardwareDeinit();
 	/*Init the hardware . spi interface  and reset,busy io*/
+	HSMHardwareInit(SPI_SPEED_10M);
 	HSMHardwareInit(SPI_SPEED_10M);
 	/*reset the 512A module*/
 	HSMReset();
@@ -365,7 +365,7 @@ unsigned long  IS32U512AReadVerisonTest(void)
 	if (ret)
 	{
 		printf("sync failed\n");
-		HSMHardwareDeinit();
+		//HSMHardwareDeinit();
 		return 1;
 	}
 	printf("sync success\n");
@@ -374,7 +374,7 @@ unsigned long  IS32U512AReadVerisonTest(void)
 	ISTECC512AFunctionPointerStructure.ISTECC512A_CosVersionRead(version);
 	printf("IS32U512A module's verison is  %2d %2d %2d %2d\n", version[0], version[1], version[2],version[3]);
 	/*deinit the hardware. spi interface and reset,busy io.release the source*/
-	HSMHardwareDeinit();
+	//HSMHardwareDeinit();
 }
 
 /*Erase APP Test,If you not sure what you're doing, don't test it.

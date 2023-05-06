@@ -31,7 +31,8 @@
 #define SM2_VERIFY_E_RS			0x0A  /*10 e value sign*/
 #define SM2_SIGN_E_VALUE		0x0B  /*11 E value sign*/
 #define SELF_TEST				0X0C  
-
+#define SELF_TEST_WITH_MUTEX	0X0D  //TEST MUL PTHREAD.
+#define SELF_TEST_MUL_PROCESS	0X0E  //TEST MUL PROCESS.
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 static void pabort(const char *s)
 {
@@ -118,6 +119,18 @@ int main(int argc, char *argv[])
 		if(HSMSelfTest(test_loop))
 		{
 			printf("HSMSelfTest failed!\n");
+		}
+		break;
+	case SELF_TEST_WITH_MUTEX:
+		if(HSMSelfTestWithMultithreading())
+		{
+			printf("HSMSelfTestWithMultithreading failed!\n");
+		}
+		break;
+	case SELF_TEST_MUL_PROCESS:
+		if(HSMSelfTestWithMulProcess())
+		{
+			printf("HSMSelfTestWithMulProcess failed!\n");
 		}
 		break;
 	default:
