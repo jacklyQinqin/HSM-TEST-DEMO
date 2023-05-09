@@ -386,8 +386,8 @@ int thread2(void)
 		printf("pin confirm success!\n");
 	}
 
-	/*Generate 16 group key pairs.*/
-	for(i=8;i<14;i++)
+	/*Generate 8 group key pairs.*/
+	for(i=8;i<16;i++)
 	{	
 		if(ISTECC512AFunctionPointerStructure.ISTECC512A_SM2GenKeyPair(i))
 		{
@@ -400,7 +400,7 @@ int thread2(void)
 		ISTECC512AFunctionPointerStructure.ISTECC512A_SM2ExportPubkey(i,sm2_public_key,sm2_public_key+32);
 	}
 
-	/*set loops of test.*/
+	/*set loops of test. use index 8-14*/
 	while(1)
 	{
 		for(i=8;i<14;i++)
@@ -587,18 +587,19 @@ unsigned long HSMSelfTestWithMulProcess(void)
 		printf("pin confirm success!\n");
 	}
 
-	/*Generate 16 group key pairs.*/
-	for(i=14;i<16;i++)
-	{	
-		if(ISTECC512AFunctionPointerStructure.ISTECC512A_SM2GenKeyPair(i))
-		{
-			printf("ISTECC512A_SM2GenKeyPair failed!\n");
-			return (1);
-		}
-		printf("INDEX %d:\n",i);
-		ISTECC512AFunctionPointerStructure.ISTECC512A_SM2ExportPrikey(i,sm2_private_key);
-		ISTECC512AFunctionPointerStructure.ISTECC512A_SM2ExportPubkey(i,sm2_public_key,sm2_public_key+32);
-	}
+	//don't genreate key pairs. in other process have done.
+	// /*Generate 16 group key pairs.*/
+	// for(i=14;i<16;i++)
+	// {	
+	// 	if(ISTECC512AFunctionPointerStructure.ISTECC512A_SM2GenKeyPair(i))
+	// 	{
+	// 		printf("ISTECC512A_SM2GenKeyPair failed!\n");
+	// 		return (1);
+	// 	}
+	// 	printf("INDEX %d:\n",i);
+	// 	ISTECC512AFunctionPointerStructure.ISTECC512A_SM2ExportPrikey(i,sm2_private_key);
+	// 	ISTECC512AFunctionPointerStructure.ISTECC512A_SM2ExportPubkey(i,sm2_public_key,sm2_public_key+32);
+	// }
 
 	/*set loops of test.*/
 	while(1)
