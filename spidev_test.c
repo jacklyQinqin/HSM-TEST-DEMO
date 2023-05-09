@@ -33,6 +33,7 @@
 #define SELF_TEST				0X0C  
 #define SELF_TEST_WITH_MUTEX	0X0D  //TEST MUL PTHREAD.
 #define SELF_TEST_MUL_PROCESS	0X0E  //TEST MUL PROCESS.
+#define HSM_ONE_KEY_RESOTRE		0X0F  //TEST ONE KEY ERSTORE.
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 static void pabort(const char *s)
 {
@@ -131,6 +132,12 @@ int main(int argc, char *argv[])
 		if(HSMSelfTestWithMulProcess())
 		{
 			printf("HSMSelfTestWithMulProcess failed!\n");
+		}
+		break;
+	case HSM_ONE_KEY_RESOTRE:
+		if(HSMOneKeyRestore())
+		{
+			printf("HSMOneKeyRestore failed!\n");
 		}
 		break;
 	default:

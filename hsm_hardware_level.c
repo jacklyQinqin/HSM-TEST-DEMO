@@ -41,7 +41,7 @@
 
 #define SPI_DEV_NAME  "/dev/spidev32766.0"
 
-#define HSM_HARDWARE_DEBUG 0
+#define HSM_HARDWARE_DEBUG 1
 
 
 //hardware init.
@@ -266,12 +266,12 @@ unsigned int  HSMHardwareInit(unsigned long in_speed)
 /*close spi and release the io */
 unsigned int  HSMHardwareDeinit(void)
 {
-	// if(fd > 0)
-	// {
-	// 	printf("close spi fd: %d\n",fd);
-	// 	close(fd);
-	// }
-	UnexportGpioAndInit();
+	if(fd > 0)
+	{
+		printf("close spi fd: %d\n",fd);
+		close(fd);
+	}
+	//UnexportGpioAndInit();
     return 0;
 }
 

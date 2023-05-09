@@ -199,6 +199,9 @@ typedef struct
     /*2022-11-23 add  e value sign*/
   unsigned long (*ISTECC512A_SM2SignEValue)(unsigned long prikey_index, unsigned char *e, unsigned char *p_sign_data);
 
+   /*2023-5-9 add one key restore.*/
+  unsigned long (*ISTECC512A_Restore)(void);
+
 } ISTECCFunctionPointer_t;
 
 /*Don't care about it. The funciton has init the pointer .*/

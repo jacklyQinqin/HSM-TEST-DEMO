@@ -298,7 +298,7 @@ unsigned long GenKeyPair(unsigned long index)
         pthread_mutex_unlock(&hsm_mutex_pthread);
         return fail;
     }
-    HSMMsDelay(20);
+    HSMMsDelay(50);
     while (HSMGetBusystatus())
         ;
     ret = HSMRead(rx_buff, rx_buff_len);
@@ -2810,29 +2810,48 @@ unsigned long SM2EValueVerify(unsigned long pubkey_index, unsigned char *e,unsig
 }
 
 
-/****************************************************************\
-* Function:			V2XDeviceKeyGetBij
-*
-* Description: 		Get signature private extension
-*
-* Calls:
-*
-* Called By:
-*
-* Input:
-*
-* Output:
-*
-*
-* Return:
-*				  SUCCESS：       0X00
-*				  FAIL   ：       0X01
-*
-* Others:
-*					None
-*
-* Remark:          WARNING:If you're not sure, don't do it.
-\****************************************************************/
+unsigned long HSMRestoreKeys(void)
+{
+    unsigned char tx_buff[2064] = {0};
+    unsigned char rx_buff[2064] = {0};
+    unsigned long ret = 0;
+    unsigned long tx_buff_len = IS32U512A_SM2_MODULE_CMD_LEN;
+    unsigned long rx_buff_len = 6;
+    /*copy the command to send buff*/
+    const uint8_t hsm_restore[IS32U512A_SM2_MODULE_CMD_LEN] = {0xbf, 0xE1, 0x55, 0xAA, 0xCC, 0x00};
+    
+    pthread_mutex_lock(&hsm_mutex_pthread);
+    HSMPSemphre();
+    memcpy(tx_buff, hsm_restore, IS32U512A_SM2_MODULE_CMD_LEN);
+
+    while (HSMGetBusystatus())
+        ;
+    ret = HSMWrite(tx_buff, tx_buff_len);
+    if (0 != ret)
+    {
+         HSMVSemphre();
+         pthread_mutex_unlock(&hsm_mutex_pthread);
+        return fail;
+    }
+    HSMMsDelay(800);
+    ret = HSMRead(rx_buff, rx_buff_len);
+    if (ret != 0)
+    {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
+        return fail;
+    }
+    if (rx_buff[0] == 0x90 && rx_buff[1] == 0x00)
+    {
+        HSMVSemphre();
+        pthread_mutex_unlock(&hsm_mutex_pthread);
+        return sucess;
+    }
+    HSMVSemphre();
+    pthread_mutex_unlock(&hsm_mutex_pthread);
+    return fail;
+}
+
 
 /**
  * @brief
@@ -2887,4 +2906,5 @@ unsigned long FunctionPointerInit(ISTECCFunctionPointer_t *p)
     p->ISTECC512A_SM2VerifyEValueWithPubkeyIndex = SM2EValueVerify;
         /*add 2022-11-23 e value sign.*/
     p->ISTECC512A_SM2SignEValue  =  SM2SignEValue;
+    p->ISTECC512A_Restore   =  HSMRestoreKeys;
 }
