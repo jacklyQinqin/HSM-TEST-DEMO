@@ -202,6 +202,10 @@ typedef struct
    /*2023-5-9 add one key restore.*/
   unsigned long (*ISTECC512A_Restore)(void);
 
+ /*2023-5-10 add SendOneMessage and RecOneMessage for Upgrade tools*/
+ unsigned long (*ISTECC512A_SendOneMessage)(unsigned char *send, unsigned long send_len);
+ unsigned long (*ISTECC512A_ReceiveOneMessage)(unsigned char * rec,unsigned long rec_len);
+
 } ISTECCFunctionPointer_t;
 
 /*Don't care about it. The funciton has init the pointer .*/

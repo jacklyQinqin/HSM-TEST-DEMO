@@ -41,7 +41,7 @@
 
 #define SPI_DEV_NAME  "/dev/spidev32766.0"
 
-#define HSM_HARDWARE_DEBUG 1
+#define HSM_HARDWARE_DEBUG 0
 
 
 //hardware init.
@@ -154,17 +154,17 @@ void hex_dump(const void *src, size_t length, size_t line_size, char *prefix)
  */
 static unsigned int ExportGpioAndInit(void)
 {
-	/*导出需要的3个IO*/ 
-	gpio_export(&busyPin);
-	//gpio_export(&csPin);
-	gpio_export(&resetPin);
-	/*设置方向*/ 
-	gpio_direction(&busyPin);
-	//gpio_direction(&csPin);
-	gpio_direction(&resetPin);
-	/*设置默认值*/
-	//gpio_write(&csPin,1);
-	gpio_write(&resetPin,1);
+	// /*导出需要的3个IO*/ 
+	// gpio_export(&busyPin);
+	// //gpio_export(&csPin);
+	// gpio_export(&resetPin);
+	// /*设置方向*/ 
+	// gpio_direction(&busyPin);
+	// //gpio_direction(&csPin);
+	// gpio_direction(&resetPin);
+	// /*设置默认值*/
+	// //gpio_write(&csPin,1);
+	// gpio_write(&resetPin,1);
 	
 	return 0;	
 } 
@@ -173,9 +173,9 @@ static unsigned int ExportGpioAndInit(void)
 /*Release IO resources */
 static void UnexportGpioAndInit(void)
 {
-	gpio_unexport(&busyPin);
-	//gpio_unexport(&csPin);
-	gpio_unexport(&resetPin);
+	// gpio_unexport(&busyPin);
+	// //gpio_unexport(&csPin);
+	// gpio_unexport(&resetPin);
 }
 
 

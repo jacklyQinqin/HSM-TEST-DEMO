@@ -86,7 +86,7 @@ static int hsm_semphore_id;
 int HSMSetSemphre(void);
 static void HSMDeleteSemphre(void);
 static int HSMPostSemphre(void);
-static int HSMVSemphre(void);
+int HSMVSemphre(void);
 
 int HSMSempohreInit(void);
 
@@ -102,7 +102,7 @@ int HSMSetSemphre(void)
     return 1;
     
 }
-static void HSMDeleteSemphre(void)
+void HSMDeleteSemphre(void)
 {
     union semun sem_union;
     sem_union.val = 1;
@@ -111,7 +111,7 @@ static void HSMDeleteSemphre(void)
        fprintf(stderr,"Failed to delete semphore.\n");
 }
 /*信号量-1操作*/
-static int HSMPSemphre(void)
+int HSMPSemphre(void)
 {
     struct sembuf sem_b;
     sem_b.sem_num = 0;
@@ -128,7 +128,7 @@ static int HSMPSemphre(void)
     return 1;
 }
 /*信号量+1操作*/
-static int HSMVSemphre(void)
+int HSMVSemphre(void)
 {
     
     struct sembuf sem_b;
@@ -161,6 +161,16 @@ int HSMSempohreDeInit(void)
     return 0;
 }
 
+
+int HSMGetSem(void)
+{
+    union semun sem_union;
+    sem_union.val = -2;
+
+    sem_union.val = semctl(hsm_semphore_id,0,GETVAL,sem_union) ;
+    printf("the value is %4d\n",sem_union.val);    
+    return  sem_union.val;
+}
 
 
 
@@ -2473,7 +2483,7 @@ unsigned long APPErase(void)
  * @param len
  * @return unsigned long
  */
-static unsigned long IS32U512ASendOneMessage(unsigned char *send, unsigned long len)
+unsigned long IS32U512ASendOneMessage(unsigned char *send, unsigned long len)
 {
     unsigned long time;
     unsigned long i = 0;
@@ -2503,7 +2513,7 @@ static unsigned long IS32U512ASendOneMessage(unsigned char *send, unsigned long 
  * @param len
  * @return unsigned long
  */
-static unsigned long IS32U512AReceiveOneMessage(unsigned char *rec, unsigned long len)
+unsigned long IS32U512AReceiveOneMessage(unsigned char *rec, unsigned long len)
 {
     unsigned long time;
     unsigned long count;
@@ -2528,7 +2538,7 @@ static unsigned long IS32U512AReceiveOneMessage(unsigned char *rec, unsigned lon
 
 /**
  * @brief
- * IS32U512A not support.you don't need it now.
+ * 
  * @return unsigned long
  */
 unsigned long APPUpdate(void)
@@ -2907,4 +2917,8 @@ unsigned long FunctionPointerInit(ISTECCFunctionPointer_t *p)
         /*add 2022-11-23 e value sign.*/
     p->ISTECC512A_SM2SignEValue  =  SM2SignEValue;
     p->ISTECC512A_Restore   =  HSMRestoreKeys;
+
+    /*add  SendOneMessage and RecOneMessage for upgrade tool*/
+    p->ISTECC512A_SendOneMessage = IS32U512ASendOneMessage;
+    p->ISTECC512A_ReceiveOneMessage = IS32U512AReceiveOneMessage;
 }
